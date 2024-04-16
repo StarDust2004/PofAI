@@ -4,7 +4,14 @@
 @Author ：Hry
 @Date ：2024/04/09 10:47
 @Intro: to create a class for the game scenes, including player/wall/box/hole, etc
+@Modify: 2024/04/10? remove posBox and posPlayer from GameScene's property, \
+    resuming that they shall not be part of this class
 """
+# DisplayScene()还未完成
+# self.posBox / self.posPlayer还在被各个函数使用，但它们不应该作为类的元素存在;
+# 后续希望去除这两个变量，在其他调用这个类的函数中维护posBox(list)和posPlayer(tuple?)
+# 而对本类中的各个函数传入posBox和posPlayer。
+# 新增了PrintMap，用于调试时观察局面改变
 
 import numpy as np
 import json
@@ -88,6 +95,17 @@ class GameScene:
     def DisplayScene(self):
         pass
 
+    # 调试和测试时用的，只是简单打出矩阵
+    def PrintMap(self, posBox, posPlayer, posHole):
+        TheMap = deepcopy(self.map)
+        for box in posBox:
+            TheMap[box[1]][box[2]] += 2 # 标识box为2
+        for hole in posHole:
+            TheMap[hole[1]][hole[2]] += 3
+        TheMap[posPlayer[0]][posPlayer[1]] += 10
+        print(TheMap)
+
+
     # 判断当前局面是否获胜，应当在每一步移动后判断一次
     def isSuccess(self):
         if self.mode == 0: # 箱子与洞口无对应关系
@@ -101,8 +119,71 @@ class GameScene:
             pass
 
     # 判断是否进入了死局，应当在每一步移动后判断一次
-    def isDeadend(self):
-        pass
+    # 只在当前局势下判断是否出现了死锁，而不考虑在移动一步或几步后、是否其实已经是最终无解了
+    def isDeadend(self, posBox): # posBox为当前箱子位置列表
+        currentMap = deepcopy(self.map) # 当前地图，此时只标识了wall
+        for box in posBox:
+            currentMap[box[1]][box[2]] = 2 # 标识box为2
+        pos_hole = [i[1:3] for i in self.hole]
+        for box in posBox:
+            if box[1:3] not in pos_hole: # 此箱子还未入洞
+                # 待检查的区域
+                area = [ [box[1]-1, box[2]-1], [box[1]-1, box[2]], [box[1]-1, box[2]+1],\
+                               [box[1], box[2]-1],   [box[1], box[2]],   [box[1], box[2]+1]  ,\
+                               [box[1]+1, box[2]-1], [box[1]+1, box[2]], [box[1]+1, box[2]+1] ]
+                # 墙角情形 * 4
+                if currentMap[area[1][0]][area[1][1]] == 1 and currentMap[area[3][0]][area[3][1]] == 1:
+                    return True
+                elif currentMap[area[1][0]][area[1][1]] == 1 and currentMap[area[5][0]][area[5][1]] == 1:
+                    return True
+                elif currentMap[area[3][0]][area[3][1]] == 1 and currentMap[area[7][0]][area[7][1]] == 1:
+                    return True
+                elif currentMap[area[5][0]][area[5][1]] == 1 and currentMap[area[7][0]][area[7][1]] == 1:
+                    return True
+                # 四块情形 * n（4种方位）
+                elif currentMap[area[0][0]][area[0][1]] > 0 and currentMap[area[1][0]][area[1][1]] > 0 and \
+                      currentMap[area[3][0]][area[3][1]] > 0:
+                    return True
+                elif currentMap[area[1][0]][area[1][1]] > 0 and currentMap[area[2][0]][area[2][1]] > 0 and \
+                      currentMap[area[5][0]][area[5][1]] > 0:
+                    return True
+                elif currentMap[area[3][0]][area[3][1]] > 0 and currentMap[area[6][0]][area[6][1]] > 0 and \
+                      currentMap[area[7][0]][area[7][1]] > 0:
+                    return True
+                elif currentMap[area[5][0]][area[5][1]] > 0 and currentMap[area[7][0]][area[7][1]] > 0 and \
+                      currentMap[area[8][0]][area[8][1]] > 0:
+                    return True
+                # “之”字形 * 8
+                elif currentMap[area[0][0]][area[0][1]] == 1 and currentMap[area[3][0]][area[3][1]] == 2 and \
+                      currentMap[area[7][0]][area[7][1]] == 1:
+                    return True
+                elif currentMap[area[1][0]][area[1][1]] == 1 and currentMap[area[5][0]][area[5][1]] == 2 and \
+                      currentMap[area[8][0]][area[8][1]] == 1:
+                    return True
+                elif currentMap[area[0][0]][area[0][1]] ==1 and currentMap[area[1][0]][area[1][1]] == 2 and \
+                      currentMap[area[5][0]][area[5][1]] == 1:
+                    return True
+                elif currentMap[area[3][0]][area[3][1]] == 1 and currentMap[area[7][0]][area[7][1]] == 2 and \
+                      currentMap[area[8][0]][area[8][1]] == 1:
+                    return True
+                elif currentMap[area[1][0]][area[1][1]] == 1 and currentMap[area[3][0]][area[3][1]] == 2 and \
+                      currentMap[area[6][0]][area[6][1]] == 1:
+                    return True
+                elif currentMap[area[2][0]][area[2][1]] == 1 and currentMap[area[5][0]][area[5][1]] == 5 and \
+                      currentMap[area[7][0]][area[7][1]] == 1:
+                    return True
+                elif currentMap[area[2][0]][area[2][1]] == 1 and currentMap[area[1][0]][area[1][1]] == 2 and \
+                      currentMap[area[3][0]][area[3][1]] == 1:
+                    return True
+                elif currentMap[area[5][0]][area[5][1]] == 1 and currentMap[area[7][0]][area[7][1]] == 2 and \
+                      currentMap[area[6][0]][area[6][1]] == 1:
+                    return True
+                else: # 可能还有其他未考虑到的情况
+                    pass
+        return False # 未出现任何一种死锁情况，返回False，表示尚未陷入死局
+                
+
+
     
     # 执行移动操作，目标动作是action
     # 调用此函数时，默认action已经是经过检验的合法的行动
