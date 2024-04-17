@@ -56,8 +56,8 @@ class GameScene:
         # hole = data["hole"]    # [name/serial number/code, posx, posy]
         hole = sorted(data["hole"], key = lambda x:x[0]) # 按照hole的序号重新排好序
         # debugging
-        print(init_box)
-        print(hole)
+        print("init_boxes:", init_box)
+        print("holes:", hole)
 
 
         # goal: [ [0/1/2, boxname, hole.x, hole.y, direction] ] # 感觉用不上，可以删掉？
@@ -136,7 +136,7 @@ class GameScene:
                 cost += np.abs(box_x[i] - hole_x[i]) + np.abs(box_y[i] - hole_y[i])
         else: # 可能的其他情况
             pass
-
+        return cost
 
 
     # 调试和测试时用的，只是简单打出矩阵
@@ -258,27 +258,53 @@ class GameScene:
     
     # 执行移动操作，目标动作是action
     # 调用此函数时，默认action已经是经过检验的合法的行动
+    # def Move(self, action, posBox, posPlayer): # action:[1,0,'d']
+    #     # 更新player位置 posPlayer:[2,1]
+    #     posPlayer[0] += action[0]
+    #     posPlayer[1] += action[1]
+    #     if self.mode == 0: # 箱子与洞口无对应关系，且箱子入洞后不消失
+    #         for index, posB in enumerate(posBox):
+    #             # posB: ['a',2,2]
+    #             if posB[1:3] == posPlayer: # 推动箱子
+    #                 posBox[index][1] += action[0]
+    #                 posBox[index][2] += action[1]
+    #                 break
+    #     elif self.mode == 1: # 箱子与洞口一一对应，且箱子入洞后消失
+    #         for index, posB in enumerate(posBox):
+    #             # posB: ['a',2,2]
+    #             if posB[1:3] == posPlayer and posB != self.hole[index]: # 箱子不在洞里，方可推动箱子
+    #                 posBox[index][1] += action[0]
+    #                 posBox[index][2] += action[1]
+    #                 break
     def Move(self, action, posBox, posPlayer): # action:[1,0,'d']
         # 更新player位置 posPlayer:[2,1]
-        posPlayer[0] += action[0]
-        posPlayer[1] += action[1]
+        px = posPlayer[0] + action[0]
+        py = posPlayer[1] + action[1]
+        posP = [px, py] # 新的Player位置
+        posB = [] # 用来存新的箱子位置
         if self.mode == 0: # 箱子与洞口无对应关系，且箱子入洞后不消失
-            for index, posB in enumerate(posBox):
-                # posB: ['a',2,2]
-                if posB[1:3] == posPlayer: # 推动箱子
-                    posBox[index][1] += action[0]
-                    posBox[index][2] += action[1]
-                    break
+            for index, box in enumerate(posBox): # posB: ['a',2,2]
+                if box[1:3] == posP: # 需要推走箱子
+                    bx = box[1] + action[0]
+                    by = box[2] + action[0]
+                    new_box = [box[0], bx, by]
+                else:
+                    new_box = box
+                posB.append(new_box)
         elif self.mode == 1: # 箱子与洞口一一对应，且箱子入洞后消失
-            for index, posB in enumerate(posBox):
-                # posB: ['a',2,2]
-                if posB[1:3] == posPlayer and posB != self.hole[index]: # 箱子不在洞里，方可推动箱子
-                    posBox[index][1] += action[0]
-                    posBox[index][2] += action[1]
-                    break
+            for index, box in enumerate(posBox): # posB: ['a',2,2]
+                if box[1:3] == posP and box != self.hole[index]: # 箱子不在洞里，方可推动箱子
+                    bx = box[1] + action[0]
+                    by = box[2] + action[1]
+                    new_box = [box[0], bx, by]
+                else:
+                    new_box = box
+                posB.append(new_box)
+
+        return posP, posB # 返回移动后，玩家和箱子坐标列表
 
     
-    # 处理键盘的输入keystroke
+    # 处理键盘的输入keystroke，合法性必须在传入前得到确认
     # 此处输入的参数keystroke并不是键盘按键，是已经处理过的{'u','d','l','r'}之一
     def from_keyboard(self, keystroke):
         legal_in = ['u', 'd', 'l', 'r'] # 合法输入
