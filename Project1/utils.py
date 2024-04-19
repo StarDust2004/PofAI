@@ -75,8 +75,9 @@ class PriorityQueue(object):
         return len(self._queue) == 0
 
     # 比较并替换节点
-    def compare_and_replace(self, i, node):
-        if node < self._queue[i]: # Node.__lt__ # 如果新节点node更优
+    def compare_and_replace(self, i:int, node):
+        # if node < self._queue[i]: # Node.__lt__ # 如果新节点node更优
+        if node.__lt__(self._queue[i]):
             self._queue.pop(index=i)
             self._queue.add(node) # 则替换掉原先那个节点
 

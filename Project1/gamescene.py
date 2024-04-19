@@ -24,10 +24,10 @@ class GameScene:
     # info：列表/字典？，形如json文件中的内容，给出地图场景设置
     def __init__(self, map_json = None, info = None):
         if map_json != None:
-            self.mode, self.size, self.wall, self.init_box, self.hole, self.goal, \
+            self.mode, self.size, self.wall, self.init_box, self.hole, \
                 self.init_player = self.ReadFromJson(map_json)
         else:
-            self.mode, self.size, self.wall, self.init_box, self.hole, self.goal, \
+            self.mode, self.size, self.wall, self.init_box, self.hole, \
                 self.init_player = info
         # 以下二者是会改变的，所以不应该作为该类的属性
         self.posBox = self.init_box # 游戏过程中移动后的箱子位置列表
@@ -56,16 +56,12 @@ class GameScene:
         # hole = data["hole"]    # [name/serial number/code, posx, posy]
         hole = sorted(data["hole"], key = lambda x:x[0]) # 按照hole的序号重新排好序
         # debugging
-        print("init_boxes:", init_box)
-        print("holes:", hole)
-
-
-        # goal: [ [0/1/2, boxname, hole.x, hole.y, direction] ] # 感觉用不上，可以删掉？
-        goal = data["goal"]    
+        # print("init_boxes:", init_box) 
+        # print("holes:", hole)    
 
         init_player = data["player"]
         # 返回信息
-        return mode, size, wall, init_box, hole, goal, init_player
+        return mode, size, wall, init_box, hole, init_player
     
 
     # 检查给定移动是否可行
@@ -73,7 +69,7 @@ class GameScene:
     # 该逻辑依赖于posBox和self.hole严格按照顺序一一对应地排列
     # 如果箱子入洞后会消失，那么就应该对self.posBox进行处理，把消失的箱子去除掉
     def is_valid_move(self, move, posBox, posPlayer):
-        currentMap = deepcopy(self.map) # 地图，此时只标识了wall
+        currentMap = deepcopy(self.map) # 地图，此时只标识了wall = 1
         # for box in posBox:
         for index, box in enumerate(posBox):
             if self.mode == 1: # 箱子进洞后会消失，只留下一个不影响其他箱子通过的洞
@@ -114,8 +110,67 @@ class GameScene:
 
 
     # 显示游戏场景
-    def DisplayScene(self):
-        pass
+    def DisplayScene(self, posBox, posPlayer, screen, blank, player, box, wall, hole, boxinhole):
+        # param posBox：箱子位置的坐标列表; posPlayer：玩家位置的坐标
+        # screen：Pygame 中的屏幕对象，用于绘制图像。
+        # blank, player, box, wall, hole, boxinhole：空白区域、玩家、箱子、墙、目标点、箱子在洞中的图像。
+        # W <-> y, H <-> x
+
+        # 计算一个偏置，让地图居中
+        surface = pygame.display.get_surface()  # get the surface of the current active display
+        width, height = surface.get_width(), surface.get_height()  # create an array of surface.width and surface.height
+        H, W = self.size # 地图大小，int 高H:x方向长度; 宽W:y方向长度
+        w = blank.get_width()
+        width_tab = (width-w*W)/2 # y方向左右各自缩进量
+        height_tab = (height-w*H)/2 # x方向缩进量
+
+        fieldmap = deepcopy(self.map) # self.map只标记了wall = 1
+        # 现在map有wall, blank, box, player
+        for j in range(0, H):
+            for i in range(0, W):
+                if fieldmap[j,i] == 0: # blank
+                    screen.blit(blank, (width_tab + i * w, height_tab + j * w), (0, 0, w, w))
+                elif fieldmap[j,i] == 1: # wall
+                    screen.blit(wall, (width_tab + i * w, height_tab + j * w), (0, 0, w, w))
+
+        holelist = [i[1:3] for i in self.hole]
+        boxlist = [i[1:3] for i in posBox]
+
+        for ahole in holelist: # 洞口
+            screen.blit(hole, (width_tab + ahole[1] * w, height_tab + ahole[0] * w), (0, 0, w, w))
+
+        if self.mode == 0: # 箱子与洞无对应关系
+            for abox in boxlist:
+                if abox in holelist: # 箱子在洞中
+                    screen.blit(boxinhole, (width_tab + abox[1] * w, height_tab + abox[0] * w), (0, 0, w, w))
+                else: # 箱子不在洞中（那就在空地上）
+                    screen.blit(box, (width_tab + abox[1] * w, height_tab + abox[0] * w), (0, 0, w, w))
+        elif self.mode == 1: # 箱子进自己的洞会消失！
+            for index, abox in enumerate(boxlist):
+                if abox != holelist[index]: # 箱子不在它对应的洞中, 才能绘制箱子；否则，箱子已经不在了
+                    screen.blit(box, (width_tab + abox[1] * w, height_tab + abox[0] * w), (0, 0, w, w))
+
+        # player角色
+        screen.blit(player, (width_tab + posPlayer[1] * w, height_tab + posPlayer[0] * w), (0, 0, w, w))
+
+        # 对mode=1，添加文字标识（编号）
+        if self.mode == 1: 
+            for index, abox in enumerate(posBox):
+                if abox[1:3] != holelist[index]: # 箱子不在它对应的洞中, 才能绘制箱子的标号；否则，箱子已经不在了
+                # if abox[1:3] != self.hole[index][1:3]: # debug
+                    # print("1")
+                    font = pygame.font.Font('font/FreeSansBold.ttf', 12)
+                    text = font.render(abox[0], True, (255, 0, 0), (255, 255, 255))
+                    textRect = text.get_rect()  # 获得显示对象的 rect区域大小
+                    textRect.center = (width_tab + (abox[2] + 0.25) * w, height_tab + (abox[1] + 0.25) * w)  # 设置位置
+                    screen.blit(text, textRect)
+            for hole in self.hole:
+                font = pygame.font.Font('font/FreeSansBold.ttf', 12)
+                text = font.render(hole[0], True, (255, 0, 0), (255, 255, 255))
+                textRect = text.get_rect()  # 获得显示对象的 rect区域大小
+                textRect.center = (width_tab + (hole[2] + 0.75) * w, height_tab + (hole[1] + 0.75) * w)  # 设置位置
+                screen.blit(text, textRect)
+
 
 
     # 计算启发函数值：当前节点（给定节点）到目标节点最小路径代价的估计值
@@ -144,10 +199,10 @@ class GameScene:
         if self.mode == 0: # 洞口与箱子无对应关系
             TheMap = deepcopy(self.map)
             for box in posBox:
-                TheMap[box[1]][box[2]] += 2 # 标识box为2
+                TheMap[box[1]][box[2]] += 10 # 标识box为10
             for hole in posHole:
-                TheMap[hole[1]][hole[2]] += 3
-            TheMap[posPlayer[0]][posPlayer[1]] += 10
+                TheMap[hole[1]][hole[2]] += 100
+            TheMap[posPlayer[0]][posPlayer[1]] += 500
             print(TheMap)
         elif self.mode == 1: # 洞口与箱子一一对应，但无方向差别
             TheMap = deepcopy(self.map)
@@ -186,71 +241,132 @@ class GameScene:
         if self.mode == 0: # 不对应，且进洞不消失
             for box in posBox:
                 currentMap[box[1]][box[2]] = 2 # 标识box为2
+
+                pos_hole = [i[1:3] for i in self.hole]
+
+            for box in posBox:
+                if box[1:3] not in pos_hole: # 此箱子还未入洞
+                    # 待检查的区域
+                    area = [ [box[1]-1, box[2]-1], [box[1]-1, box[2]], [box[1]-1, box[2]+1],\
+                                [box[1], box[2]-1],   [box[1], box[2]],   [box[1], box[2]+1]  ,\
+                                [box[1]+1, box[2]-1], [box[1]+1, box[2]], [box[1]+1, box[2]+1] ]
+                    # 墙角情形 * 4
+                    if currentMap[area[1][0]][area[1][1]] == 1 and currentMap[area[3][0]][area[3][1]] == 1:
+                        return True
+                    elif currentMap[area[1][0]][area[1][1]] == 1 and currentMap[area[5][0]][area[5][1]] == 1:
+                        return True
+                    elif currentMap[area[3][0]][area[3][1]] == 1 and currentMap[area[7][0]][area[7][1]] == 1:
+                        return True
+                    elif currentMap[area[5][0]][area[5][1]] == 1 and currentMap[area[7][0]][area[7][1]] == 1:
+                        return True
+                    # 四块情形 * n（4种方位）
+                    elif currentMap[area[0][0]][area[0][1]] > 0 and currentMap[area[1][0]][area[1][1]] > 0 and \
+                        currentMap[area[3][0]][area[3][1]] > 0:
+                        return True
+                    elif currentMap[area[1][0]][area[1][1]] > 0 and currentMap[area[2][0]][area[2][1]] > 0 and \
+                        currentMap[area[5][0]][area[5][1]] > 0:
+                        return True
+                    elif currentMap[area[3][0]][area[3][1]] > 0 and currentMap[area[6][0]][area[6][1]] > 0 and \
+                        currentMap[area[7][0]][area[7][1]] > 0:
+                        return True
+                    elif currentMap[area[5][0]][area[5][1]] > 0 and currentMap[area[7][0]][area[7][1]] > 0 and \
+                        currentMap[area[8][0]][area[8][1]] > 0:
+                        return True
+                    # “之”字形 * 8
+                    elif currentMap[area[0][0]][area[0][1]] == 1 and currentMap[area[3][0]][area[3][1]] == 2 and \
+                        currentMap[area[7][0]][area[7][1]] == 1:
+                        return True
+                    elif currentMap[area[1][0]][area[1][1]] == 1 and currentMap[area[5][0]][area[5][1]] == 2 and \
+                        currentMap[area[8][0]][area[8][1]] == 1:
+                        return True
+                    elif currentMap[area[0][0]][area[0][1]] ==1 and currentMap[area[1][0]][area[1][1]] == 2 and \
+                        currentMap[area[5][0]][area[5][1]] == 1:
+                        return True
+                    elif currentMap[area[3][0]][area[3][1]] == 1 and currentMap[area[7][0]][area[7][1]] == 2 and \
+                        currentMap[area[8][0]][area[8][1]] == 1:
+                        return True
+                    elif currentMap[area[1][0]][area[1][1]] == 1 and currentMap[area[3][0]][area[3][1]] == 2 and \
+                        currentMap[area[6][0]][area[6][1]] == 1:
+                        return True
+                    elif currentMap[area[2][0]][area[2][1]] == 1 and currentMap[area[5][0]][area[5][1]] == 5 and \
+                        currentMap[area[7][0]][area[7][1]] == 1:
+                        return True
+                    elif currentMap[area[2][0]][area[2][1]] == 1 and currentMap[area[1][0]][area[1][1]] == 2 and \
+                        currentMap[area[3][0]][area[3][1]] == 1:
+                        return True
+                    elif currentMap[area[5][0]][area[5][1]] == 1 and currentMap[area[7][0]][area[7][1]] == 2 and \
+                        currentMap[area[6][0]][area[6][1]] == 1:
+                        return True
+                    else: # 可能还有其他未考虑到的情况
+                        pass
+
         elif self.mode == 1: # 一一对应，且箱子进洞即消失
             for index, box in enumerate(posBox):
                 if box != self.hole[index]: # 还未进入对应洞口的箱子
                     currentMap[box[1]][box[2]] = 2 # 标识box为2
                 else:
                     continue
+            pos_hole = [i[1:3] for i in self.hole]
+            for index, box in enumerate(posBox):
+                if box[1:3] != pos_hole[index]: # 此箱子还未入对应的洞
+                    # 待检查的区域
+                    area = [ [box[1]-1, box[2]-1], [box[1]-1, box[2]], [box[1]-1, box[2]+1],\
+                                [box[1], box[2]-1],   [box[1], box[2]],   [box[1], box[2]+1]  ,\
+                                [box[1]+1, box[2]-1], [box[1]+1, box[2]], [box[1]+1, box[2]+1] ]
+                    # 墙角情形 * 4
+                    if currentMap[area[1][0]][area[1][1]] == 1 and currentMap[area[3][0]][area[3][1]] == 1:
+                        return True
+                    elif currentMap[area[1][0]][area[1][1]] == 1 and currentMap[area[5][0]][area[5][1]] == 1:
+                        return True
+                    elif currentMap[area[3][0]][area[3][1]] == 1 and currentMap[area[7][0]][area[7][1]] == 1:
+                        return True
+                    elif currentMap[area[5][0]][area[5][1]] == 1 and currentMap[area[7][0]][area[7][1]] == 1:
+                        return True
+                    # 四块情形 * n（4种方位）
+                    elif currentMap[area[0][0]][area[0][1]] > 0 and currentMap[area[1][0]][area[1][1]] > 0 and \
+                        currentMap[area[3][0]][area[3][1]] > 0:
+                        return True
+                    elif currentMap[area[1][0]][area[1][1]] > 0 and currentMap[area[2][0]][area[2][1]] > 0 and \
+                        currentMap[area[5][0]][area[5][1]] > 0:
+                        return True
+                    elif currentMap[area[3][0]][area[3][1]] > 0 and currentMap[area[6][0]][area[6][1]] > 0 and \
+                        currentMap[area[7][0]][area[7][1]] > 0:
+                        return True
+                    elif currentMap[area[5][0]][area[5][1]] > 0 and currentMap[area[7][0]][area[7][1]] > 0 and \
+                        currentMap[area[8][0]][area[8][1]] > 0:
+                        return True
+                    # “之”字形 * 8
+                    elif currentMap[area[0][0]][area[0][1]] == 1 and currentMap[area[3][0]][area[3][1]] == 2 and \
+                        currentMap[area[7][0]][area[7][1]] == 1:
+                        return True
+                    elif currentMap[area[1][0]][area[1][1]] == 1 and currentMap[area[5][0]][area[5][1]] == 2 and \
+                        currentMap[area[8][0]][area[8][1]] == 1:
+                        return True
+                    elif currentMap[area[0][0]][area[0][1]] ==1 and currentMap[area[1][0]][area[1][1]] == 2 and \
+                        currentMap[area[5][0]][area[5][1]] == 1:
+                        return True
+                    elif currentMap[area[3][0]][area[3][1]] == 1 and currentMap[area[7][0]][area[7][1]] == 2 and \
+                        currentMap[area[8][0]][area[8][1]] == 1:
+                        return True
+                    elif currentMap[area[1][0]][area[1][1]] == 1 and currentMap[area[3][0]][area[3][1]] == 2 and \
+                        currentMap[area[6][0]][area[6][1]] == 1:
+                        return True
+                    elif currentMap[area[2][0]][area[2][1]] == 1 and currentMap[area[5][0]][area[5][1]] == 5 and \
+                        currentMap[area[7][0]][area[7][1]] == 1:
+                        return True
+                    elif currentMap[area[2][0]][area[2][1]] == 1 and currentMap[area[1][0]][area[1][1]] == 2 and \
+                        currentMap[area[3][0]][area[3][1]] == 1:
+                        return True
+                    elif currentMap[area[5][0]][area[5][1]] == 1 and currentMap[area[7][0]][area[7][1]] == 2 and \
+                        currentMap[area[6][0]][area[6][1]] == 1:
+                        return True
+                    else: # 可能还有其他未考虑到的情况
+                        pass
+
+
         else:
             pass
 
-        pos_hole = [i[1:3] for i in self.hole]
-        for box in posBox:
-            if box[1:3] not in pos_hole: # 此箱子还未入洞
-                # 待检查的区域
-                area = [ [box[1]-1, box[2]-1], [box[1]-1, box[2]], [box[1]-1, box[2]+1],\
-                               [box[1], box[2]-1],   [box[1], box[2]],   [box[1], box[2]+1]  ,\
-                               [box[1]+1, box[2]-1], [box[1]+1, box[2]], [box[1]+1, box[2]+1] ]
-                # 墙角情形 * 4
-                if currentMap[area[1][0]][area[1][1]] == 1 and currentMap[area[3][0]][area[3][1]] == 1:
-                    return True
-                elif currentMap[area[1][0]][area[1][1]] == 1 and currentMap[area[5][0]][area[5][1]] == 1:
-                    return True
-                elif currentMap[area[3][0]][area[3][1]] == 1 and currentMap[area[7][0]][area[7][1]] == 1:
-                    return True
-                elif currentMap[area[5][0]][area[5][1]] == 1 and currentMap[area[7][0]][area[7][1]] == 1:
-                    return True
-                # 四块情形 * n（4种方位）
-                elif currentMap[area[0][0]][area[0][1]] > 0 and currentMap[area[1][0]][area[1][1]] > 0 and \
-                      currentMap[area[3][0]][area[3][1]] > 0:
-                    return True
-                elif currentMap[area[1][0]][area[1][1]] > 0 and currentMap[area[2][0]][area[2][1]] > 0 and \
-                      currentMap[area[5][0]][area[5][1]] > 0:
-                    return True
-                elif currentMap[area[3][0]][area[3][1]] > 0 and currentMap[area[6][0]][area[6][1]] > 0 and \
-                      currentMap[area[7][0]][area[7][1]] > 0:
-                    return True
-                elif currentMap[area[5][0]][area[5][1]] > 0 and currentMap[area[7][0]][area[7][1]] > 0 and \
-                      currentMap[area[8][0]][area[8][1]] > 0:
-                    return True
-                # “之”字形 * 8
-                elif currentMap[area[0][0]][area[0][1]] == 1 and currentMap[area[3][0]][area[3][1]] == 2 and \
-                      currentMap[area[7][0]][area[7][1]] == 1:
-                    return True
-                elif currentMap[area[1][0]][area[1][1]] == 1 and currentMap[area[5][0]][area[5][1]] == 2 and \
-                      currentMap[area[8][0]][area[8][1]] == 1:
-                    return True
-                elif currentMap[area[0][0]][area[0][1]] ==1 and currentMap[area[1][0]][area[1][1]] == 2 and \
-                      currentMap[area[5][0]][area[5][1]] == 1:
-                    return True
-                elif currentMap[area[3][0]][area[3][1]] == 1 and currentMap[area[7][0]][area[7][1]] == 2 and \
-                      currentMap[area[8][0]][area[8][1]] == 1:
-                    return True
-                elif currentMap[area[1][0]][area[1][1]] == 1 and currentMap[area[3][0]][area[3][1]] == 2 and \
-                      currentMap[area[6][0]][area[6][1]] == 1:
-                    return True
-                elif currentMap[area[2][0]][area[2][1]] == 1 and currentMap[area[5][0]][area[5][1]] == 5 and \
-                      currentMap[area[7][0]][area[7][1]] == 1:
-                    return True
-                elif currentMap[area[2][0]][area[2][1]] == 1 and currentMap[area[1][0]][area[1][1]] == 2 and \
-                      currentMap[area[3][0]][area[3][1]] == 1:
-                    return True
-                elif currentMap[area[5][0]][area[5][1]] == 1 and currentMap[area[7][0]][area[7][1]] == 2 and \
-                      currentMap[area[6][0]][area[6][1]] == 1:
-                    return True
-                else: # 可能还有其他未考虑到的情况
-                    pass
         return False # 未出现任何一种死锁情况，返回False，表示尚未陷入死局
                 
 
@@ -286,7 +402,7 @@ class GameScene:
             for index, box in enumerate(posBox): # posB: ['a',2,2]
                 if box[1:3] == posP: # 需要推走箱子
                     bx = box[1] + action[0]
-                    by = box[2] + action[0]
+                    by = box[2] + action[1]
                     new_box = [box[0], bx, by]
                 else:
                     new_box = box

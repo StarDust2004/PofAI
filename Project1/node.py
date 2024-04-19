@@ -22,7 +22,9 @@ class Node():
         # “还未解决的箱子列表”
         # 在mode==1中，用于记录还没有到达指定洞口的箱子，其他箱子已经消失，所以从box列表中删除了
         # 在mode==0中，始终等于self.posBox
-        self.pendingBox = self.posBox # 修改了GameScene中的代码，应该不需要了 2024/04/117 00:25
+        # self.pendingBox = self.posBox # 修改了GameScene中的代码，应该不需要了 2024/04/117 00:25
+
+        # self.fn = self.path_cost # f(n) debug
         if self.parent: # 如果有父节点
             self.depth = self.parent.depth + 1 # 深度 = 父节点深度 + 1
 
@@ -51,39 +53,58 @@ class Node():
     
     # 根据父节点->当前节点的链表，得到从初始节点到当前节点的路径
     def path(self):
-        """ path_back = [self]
-        node = self.parent
-        while node.parent != None:
-            path_back.append(node)
-        path_back.append(node) """
         node = self
         path_back = []
-        while node != None:
+        while node:
             path_back.append(node)
             node = node.parent
         return list(reversed(path_back))
     
     # 打印初始节点到当前节点的路径上经过的所有行动, 单个行动用['u', 'd', 'l', 'r']之一表示
     def path_action_print(self):
-        path = self.path
-        for node in path:
-            print(node.action, end = ' -> ')
+        nodes = self.path()
+        action_list = []
+        for node in nodes:
+            if node.action:
+                action_list.append(node.action[-1])
+                print(node.action[-1], end = ' ')
+        return action_list
+    
+    # def path(self):
+    #     """
+    #     Returns list of nodes from this node to the root node
+    #     """
+    #     node, path_back = self, []
+    #     while node:
+    #         path_back.append(node)
+    #         node = node.parent
+    #     return list(reversed(path_back))
+
+    # def pathprint(self):
+    #     nodes = self.path()
+    #     for node in nodes:
+    #         if node.action:
+    #             print(node.action[-1],end=' ')
 
     # 计算评价函数值f(n) = g(n) + h(n)，代表节点的优先级, 越小越优先
     def Prior(self, problem: GameScene):
         hn = problem.Heuristic_func(self.posBox) # 启发函数值, 使用posBox计算
         # 不使用pendingBox的原因是，pendingBox已经删除了到达预期点的箱子，会对应不上
         # g(n): path_cost
+        # self.fn = self.path_cost + hn # debug
         return self.path_cost + hn
     
     # 返回一个表示节点的可读字符串。在调试和输出日志时有用，显示了节点的玩家位置、箱子位置和路径代价
     def __repr__(self):
         return "<Node {}{}(g={})>".format(self.posPlayer, self.posBox, self.path_cost)
 
-    # 定义了节点之间的小于比较运算。它用于优先队列中的节点排序，以便按照路径代价g(n)从小到大的顺序取出节点
+    # 定义了节点之间的小于比较运算。它用于优先队列中的节点排序，以便按照代价从小到大的顺序取出节点
     def __lt__(self, other):
         return self.path_cost < other.path_cost
-
+    # def __lt__(self, other):
+    #     return self.fn < other.fn
+    
+    
     # 判等函数，定义为：仅当两个节点的玩家位置和箱子位置全部一致，才认为二者相等
     def __eq__(self, other):
         return (self.posBox == other.posBox and self.posPlayer == other.posPlayer)
